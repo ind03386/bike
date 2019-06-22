@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+  <head>
+    <title></title>
+    <meta charset="utf-8" />
+    <link href="libs/remark-css-0.0.1/middlebury.css" rel="stylesheet" />
+    <link rel="stylesheet" href="dsXaringan.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+
+
+
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;전처리&lt;/span&gt;
+
+모델링 위한 더미화
+
+
+
+```r
+head(All)
+```
+
+```
+##   X       날짜 기온 강수량 풍속 상대습도 해면기압 전운량 지면온도
+## 1 1 2017-05-01 20.1      0  1.9     50.8   1015.9    0.0     25.8
+## 2 2 2017-05-02 20.7      0  2.1     42.0   1021.1    3.1     25.4
+## 3 3 2017-05-03 21.5      0  2.0     34.1   1020.5    0.0     27.2
+## 4 4 2017-05-04 21.0      0  2.0     43.6   1016.0    7.4     25.4
+## 5 5 2017-05-05 20.9      0  3.2     53.4   1013.4    5.1     28.4
+## 6 6 2017-05-06 14.9      0  3.8     32.0   1015.2    0.9     22.3
+##   미세먼지농도 Season Weekend 이용량
+## 1           81      1       1   5530
+## 2           88      1       1   5092
+## 3           64      1       1   6234
+## 4           59      1       1   5810
+## 5           51      1       1   6364
+## 6          199      1       0   3841
+```
+
+```r
+#season1 : (s1=1, s2=0, s3=0)
+#season2 : (s1=0, s2=1, s3=0)
+#season3 : (s1=0, s2=0, s3=1)
+#season4 : (s1=0, s2=0, s3=0)
+```
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;전처리&lt;/span&gt;
+
+모델링 위한 더미화
+
+
+
+```r
+head(All)
+```
+
+```
+##         날짜 기온 강수량 풍속 상대습도 해면기압 전운량 지면온도
+## 1 2017-05-01 20.1      0  1.9     50.8   1015.9    0.0     25.8
+## 2 2017-05-02 20.7      0  2.1     42.0   1021.1    3.1     25.4
+## 3 2017-05-03 21.5      0  2.0     34.1   1020.5    0.0     27.2
+## 4 2017-05-04 21.0      0  2.0     43.6   1016.0    7.4     25.4
+## 5 2017-05-05 20.9      0  3.2     53.4   1013.4    5.1     28.4
+## 6 2017-05-06 14.9      0  3.8     32.0   1015.2    0.9     22.3
+##   미세먼지농도 Weekend 이용량 S1 S2 S3
+## 1           81       1   5530  1  0  0
+## 2           88       1   5092  1  0  0
+## 3           64       1   6234  1  0  0
+## 4           59       1   5810  1  0  0
+## 5           51       1   6364  1  0  0
+## 6          199       0   3841  1  0  0
+```
+
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;전처리&lt;/span&gt;
+
+&lt;span style="clor;3587a8f"&gt;상관관계&lt;/span&gt; 파악
+
+```r
+all_numVar &lt;- All[,-c(1,10,12,13,14)]
+cor_numVar &lt;- cor(all_numVar, use="pairwise.complete.obs") #correlations of all numeric variables
+#sort on decreasing correlations with 이용량
+cor_sorted &lt;- as.matrix(sort(cor_numVar[,'이용량'], decreasing = TRUE))
+#select only high corelations
+CorHigh &lt;- names(which(apply(cor_sorted, 1, function(x) abs(x)&gt;0.3)))
+cor_numVar &lt;- cor_numVar[CorHigh, CorHigh]
+```
+
+####변수들과 이용량 간의 Correlation Plot 그림
+####상관관계가 0.3 이상으로 의미있게 높은 변수들 추출
+
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;전처리&lt;/span&gt;
+Correlation Plot
+
+![](PPT3_files/figure-html/unnamed-chunk-7-1.png)&lt;!-- --&gt;
+
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+1)Lasso 회귀
+
+```r
+#lasso 회귀
+All_2 &lt;- All[,-1]
+x1&lt;- model.matrix(이용량~., All_2)[,-1]
+y1 &lt;- All_2$이용량
+
+set.seed(1575)
+train1=sample(1:nrow(x1), nrow(x1)/2)
+test1=(-train1)
+ytest1= y1[test1]
+
+cv.lasso1 &lt;- cv.glmnet(x1[train1,], y1[train1], alpha=1)
+lasso.coef1 = predict(cv.lasso1, type = "coefficients", s=cv.lasso1$lambda.min) # coefficients
+
+lasso.prediction1 = predict(cv.lasso1, s=cv.lasso1$lambda.min, newx = x1[test1,]) # coefficients
+```
+
+ - Mean-Squared 오차
+
+```r
+sqrt(mean((lasso.prediction1-ytest1)^2))
+```
+
+```
+## [1] 2925.506
+```
+
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+2)랜덤 포레스트
+
+```r
+set.seed(1234)
+sampling&lt;-sample(1:length(All$이용량), size=as.integer(length(All$이용량)/3*2))
+All_train &lt;- All[,-1]
+All_train &lt;- All_train[c(sampling),]
+All_test &lt;- All_train[-c(sampling),]
+test_x &lt;- All_test[c("기온","강수량" ,"풍속" ,"상대습도"     ,"해면기압",     "전운량",      
+ "지면온도"   ,  "미세먼지농도" ,"Weekend",     
+    "S1"           ,"S2",           "S3")]
+test_y &lt;- All_test$이용량
+set.seed(1234)
+
+rf.fit &lt;- randomForest(`이용량`~.,data=All_train, mtry=4, ntree=400, importance=TRUE)
+```
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+2)랜덤 포레스트
+- 성능 평가, Mean-Squared Error
+
+```r
+y_pred= predict(rf.fit, test_x)
+importance(rf.fit)
+```
+
+```
+##                 %IncMSE IncNodePurity
+## 기온         19.1947507     805610717
+## 강수량       16.4198040     342954006
+## 풍속         13.4906709     389572177
+## 상대습도     13.5422713     469286563
+## 해면기압     11.0070707     531938122
+## 전운량       11.1668867     379811208
+## 지면온도     22.5419797    1040375709
+## 미세먼지농도 10.3065740     331978959
+## Weekend       0.9209032      43645114
+## S1            4.3429756      53617360
+## S2            5.7087293      37706799
+## S3            5.8496208      50242462
+```
+
+```r
+sqrt(mean((y_pred-test_y)^2))
+```
+
+```
+## [1] 1094.758
+```
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+3)Regression Tree
+![](PPT3_files/figure-html/unnamed-chunk-12-1.png)&lt;!-- --&gt;
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+3)Regression Tree
+ - 프루닝: 9개의 가지로 결정
+
+```r
+cv_trees &lt;-cv.tree(treemod, FUN=prune.tree)
+plot(cv_trees)
+```
+
+![](PPT3_files/figure-html/unnamed-chunk-13-1.png)&lt;!-- --&gt;
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+3)Regression Tree
+ - Pruned Tree
+ 
+
+```r
+pruned_tree&lt;- prune.tree(treemod, best=9)
+plot(pruned_tree)
+text(pruned_tree, pretty=0)
+```
+
+![](PPT3_files/figure-html/unnamed-chunk-14-1.png)&lt;!-- --&gt;
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+3)Regression Tree
+ - 성능 평가, Mean-Squared Error
+
+
+
+```r
+treepred &lt;- predict(pruned_tree, All_test, type='vector')
+sqrt(mean((treepred-test_y)^2))
+```
+
+```
+## [1] 2347.121
+```
+---
+
+
+
+
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+4)Multiple Linear Regression
+
+```r
+lm1 &lt;- lm(이용량~. , data=All_train)
+summary(lm1)$coef
+```
+
+```
+##                  Estimate   Std. Error    t value     Pr(&gt;|t|)
+## (Intercept)  81406.313449 41049.243431  1.9831380 4.814003e-02
+## 기온            60.189554    92.445828  0.6510792 5.154263e-01
+## 강수량         -49.434284    14.888339 -3.3203357 9.946318e-04
+## 풍속         -1293.289976   269.168582 -4.8047583 2.310067e-06
+## 상대습도       -52.919812    14.873543 -3.5579830 4.256840e-04
+## 해면기압       -69.368130    39.817552 -1.7421496 8.236829e-02
+## 전운량         -72.091673    64.039392 -1.1257395 2.610538e-01
+## 지면온도        39.750576    77.854565  0.5105748 6.099735e-01
+## 미세먼지농도     5.722994     6.874389  0.8325094 4.056941e-01
+## Weekend1      -110.622747   324.868983 -0.3405150 7.336748e-01
+## S11           2687.411951   581.920124  4.6181801 5.461604e-06
+## S21           1618.666399   949.170022  1.7053493 8.902424e-02
+## S31           2559.761759   724.257662  3.5343247 4.641994e-04
+```
+---
+
+
+
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+4)Multiple Linear Regression
+
+```r
+step(lm1)
+```
+
+```
+## Start:  AIC=5730.17
+## 이용량 ~ 기온 + 강수량 + 풍속 + 상대습도 + 해면기압 + 전운량 + 
+##     지면온도 + 미세먼지농도 + Weekend + S1 + S2 + S3
+## 
+##                Df Sum of Sq        RSS    AIC
+## - Weekend       1    915400 2740395223 5728.3
+## - 지면온도      1   2058057 2741537879 5728.4
+## - 기온          1   3346619 2742826441 5728.6
+## - 미세먼지농도  1   5471633 2744951455 5728.9
+## - 전운량        1  10004939 2749484761 5729.5
+## &lt;none&gt;                      2739479822 5730.2
+## - S2            1  22959652 2762439475 5731.2
+## - 해면기압      1  23961252 2763441074 5731.3
+## - 강수량        1  87036740 2826516562 5739.4
+## - S3            1  98616941 2838096764 5740.9
+## - 상대습도      1  99941614 2839421436 5741.1
+## - S1            1 168376069 2907855892 5749.6
+## - 풍속          1 182255952 2921735774 5751.4
+## 
+## Step:  AIC=5728.3
+## 이용량 ~ 기온 + 강수량 + 풍속 + 상대습도 + 해면기압 + 전운량 + 
+##     지면온도 + 미세먼지농도 + S1 + S2 + S3
+## 
+##                Df Sum of Sq        RSS    AIC
+## - 지면온도      1   2122497 2742517720 5726.6
+## - 기온          1   3216530 2743611752 5726.7
+## - 미세먼지농도  1   5688994 2746084217 5727.0
+## - 전운량        1   9939949 2750335172 5727.6
+## &lt;none&gt;                      2740395223 5728.3
+## - S2            1  23498552 2763893775 5729.4
+## - 해면기압      1  24147627 2764542849 5729.5
+## - 강수량        1  86143841 2826539064 5737.4
+## - S3            1 100084075 2840479297 5739.2
+## - 상대습도      1 101310778 2841706001 5739.4
+## - S1            1 170248414 2910643637 5748.0
+## - 풍속          1 184172869 2924568091 5749.7
+## 
+## Step:  AIC=5726.57
+## 이용량 ~ 기온 + 강수량 + 풍속 + 상대습도 + 해면기압 + 전운량 + 
+##     미세먼지농도 + S1 + S2 + S3
+## 
+##                Df Sum of Sq        RSS    AIC
+## - 미세먼지농도  1   4875113 2747392833 5725.2
+## - 전운량        1  14201932 2756719652 5726.4
+## &lt;none&gt;                      2742517720 5726.6
+## - S2            1  23860965 2766378685 5727.7
+## - 해면기압      1  25350748 2767868468 5727.9
+## - 기온          1  64143286 2806661005 5732.9
+## - 강수량        1  87612578 2830130298 5735.9
+## - S3            1  97962126 2840479845 5737.2
+## - 상대습도      1 111850843 2854368563 5739.0
+## - S1            1 171881797 2914399516 5746.5
+## - 풍속          1 187349163 2929866883 5748.4
+## 
+## Step:  AIC=5725.21
+## 이용량 ~ 기온 + 강수량 + 풍속 + 상대습도 + 해면기압 + 전운량 + 
+##     S1 + S2 + S3
+## 
+##            Df Sum of Sq        RSS    AIC
+## - 전운량    1  14927477 2762320310 5725.2
+## &lt;none&gt;                  2747392833 5725.2
+## - S2        1  19711189 2767104022 5725.8
+## - 해면기압  1  24228563 2771621396 5726.4
+## - 기온      1  69276513 2816669346 5732.2
+## - 강수량    1  90132648 2837525481 5734.8
+## - S3        1  93538535 2840931367 5735.3
+## - 상대습도  1 110484256 2857877089 5737.4
+## - S1        1 167605023 2914997856 5744.5
+## - 풍속      1 190721256 2938114089 5747.4
+## 
+## Step:  AIC=5725.16
+## 이용량 ~ 기온 + 강수량 + 풍속 + 상대습도 + 해면기압 + S1 + S2 + 
+##     S3
+## 
+##            Df Sum of Sq        RSS    AIC
+## &lt;none&gt;                  2762320310 5725.2
+## - S2        1  19537708 2781858017 5725.7
+## - 해면기압  1  19847259 2782167569 5725.7
+## - 기온      1  75725953 2838046263 5732.9
+## - S3        1  92905865 2855226175 5735.1
+## - 강수량    1  96890028 2859210338 5735.6
+## - S1        1 165626086 2927946396 5744.1
+## - 풍속      1 178298958 2940619268 5745.7
+## - 상대습도  1 196301765 2958622075 5747.9
+```
+
+```
+## 
+## Call:
+## lm(formula = 이용량 ~ 기온 + 강수량 + 풍속 + 상대습도 + 해면기압 + 
+##     S1 + S2 + S3, data = All_train)
+## 
+## Coefficients:
+## (Intercept)         기온       강수량         풍속     상대습도  
+##    74537.90       110.75       -51.65     -1211.03       -63.85  
+##    해면기압          S11          S21          S31  
+##      -62.32      2642.95      1428.94      2350.48
+```
+
+```r
+# AIC 를 가장 많이 낮추는 모델
+lm2&lt;-lm(이용량~S2+미세먼지농도+전운량, data=All_train)
+pred1&lt;-predict(lm2, test_x, interval="confidence")
+
+pred_table&lt;-cbind(pred1, test_y)
+```
+---
+###일별 이용량 예측 - &lt;span style="font-size: 30px; color:grey"&gt;분석&lt;/span&gt;
+
+모델 선택
+ - Mean Squared Error 비교
+ 
+| Lasso Regression| Random Forest | Regression Tree |
+|:-------------:|:-------------:|:-----:|
+|    2925.506   | 1094.758 | 2311.037 |
+---
+class: inverse, center, middle
+
+#3. 결론
+
+---
+### random forest model로 2019년 6월 9일의 공공자전거 수요량을 예측해봅니다.
+
+
+```r
+Icnweather &lt;- read.csv("인천날씨정보.csv")
+Icndust &lt;- read.csv("인천미세먼지.csv")
+
+Icnweather&lt;-Icnweather[,-1,-2]
+names(Icnweather)&lt;-c('날짜','기온','강수량','풍속','상대습도','해면기압','전운량','지면온도')
+Icnweather[is.na(Icnweather)]&lt;-0
+
+head(Icnweather)
+```
+
+```
+##         날짜 기온 강수량 풍속 상대습도 해면기압 전운량 지면온도
+## 1 2019-05-20 15.1    8.3  5.1     68.5   1005.4    3.6     18.6
+## 2 2019-05-21 15.8    0.0  3.8     69.4   1005.5    0.0     19.2
+## 3 2019-05-22 17.6    0.0  3.5     64.1   1005.3    1.1     21.3
+## 4 2019-05-23 19.5    0.0  2.5     62.9   1008.5    0.0     25.1
+## 5 2019-05-24 22.2    0.0  2.3     59.0   1010.6    1.0     25.4
+## 6 2019-05-25 21.7    0.0  2.6     62.4   1014.8    7.3     24.8
+```
+
+```r
+names(Icndust)&lt;- c("날짜","미세먼지농도")
+
+
+
+Icnfullweatherdata&lt;-left_join(Icnweather,Icndust, by="날짜")
+Icnfullweatherdata[is.na(Icnfullweatherdata)]&lt;-'NA'
+Icnfullweatherdata&lt;-filter(Icnfullweatherdata, 미세먼지농도!="NA")
+```
+---
+### test data와 같은 형식으로 정리해줍니다
+
+```r
+library(stringr)
+library(chron)
+Sys.setlocale("LC_ALL", "korean")
+```
+
+```
+## [1] "LC_COLLATE=Korean_Korea.949;LC_CTYPE=Korean_Korea.949;LC_MONETARY=Korean_Korea.949;LC_NUMERIC=C;LC_TIME=Korean_Korea.949"
+```
+
+```r
+attach(Icnfullweatherdata)
+
+Icnfinalweather&lt;-Icnfullweatherdata %&gt;%
+  mutate(Season = ifelse(str_sub(날짜,6,7)=='03'|str_sub(날짜,6,7)=='04'|str_sub(날짜,6,7)=='05',1,
+                         ifelse(str_sub(날짜,6,7)=='06'|str_sub(날짜,6,7)=='07'|str_sub(날짜,6,7)=='08',2,
+                                ifelse(str_sub(날짜,6,7)=='09'|str_sub(날짜,6,7)=='10'|str_sub(날짜,6,7)=='11',3,4)
+                         )))
+
+Icnfinalweather&lt;-Icnfinalweather %&gt;%
+  mutate_at(c("날짜"),function(x){as.Date(x, format="%Y-%m-%d")})
+Icnfinalweather&lt;-Icnfinalweather %&gt;%
+  mutate(Weekend = ifelse(is.weekend(날짜),0,1))
+
+Icnfinalweather&lt;-Icnfinalweather %&gt;% mutate(S1=ifelse(Season==1,1,0),
+               S2=ifelse(Season==2,1,0),
+               S3=ifelse(Season==3,1,0))
+Icnfinalweather&lt;-Icnfinalweather[,-10]
+Icnfinalweather$S1 &lt;- as.factor(Icnfinalweather$S1)
+Icnfinalweather$S2 &lt;- as.factor(Icnfinalweather$S2)
+Icnfinalweather$S3 &lt;- as.factor(Icnfinalweather$S3)
+Icnfinalweather$Weekend &lt;- as.factor(Icnfinalweather$Weekend)
+Icnfinalweather$미세먼지농도&lt;-as.numeric(Icnfinalweather$미세먼지농도)
+```
+---
+
+### 다음은 2019년 6월 9월 서울의 날씨 데이터입니다
+
+```r
+weatherinfo_190609&lt;-Icnfinalweather[19,][-1]
+weatherinfo_190609
+```
+
+```
+##    기온 강수량 풍속 상대습도 해면기압 전운량 지면온도 미세먼지농도 Weekend
+## 19 20.1      0  2.3     78.1   1005.6    8.6     21.4           23       0
+##    S1 S2 S3
+## 19  0  1  0
+```
+
+---
+### random forest model을 통해 예측한 수요량은 다음과 같습니다
+
+```r
+    weatherinfo_190609 &lt;- rbind(test_x[1, ] , weatherinfo_190609)
+    weatherinfo_190609 &lt;- weatherinfo_190609[-1,]
+predict(rf.fit, weatherinfo_190609)
+```
+
+```
+##       19 
+## 8188.083
+```
+
+```r
+newpred&lt;-predict(rf.fit, weatherinfo_190609) 
+
+#2019년 6월 9일의 예측 수요량은 약 8200대입니다.
+cbind(newpred, Icnfinalweather[19,] )
+```
+
+```
+##     newpred       날짜 기온 강수량 풍속 상대습도 해면기압 전운량 지면온도
+## 19 8188.083 2019-06-09 20.1      0  2.3     78.1   1005.6    8.6     21.4
+##    미세먼지농도 Weekend S1 S2 S3
+## 19           23       0  0  1  0
+```
+
+---
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();</script>
+
+<script>
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

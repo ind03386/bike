@@ -1,0 +1,393 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = FALSE)
+library(chron)
+library(plyr)
+
+```
+
+
+
+#날씨정보
+```{r}
+Sys.setlocale("LC_ALL", "C")
+weather<-read.csv("날씨.csv")
+
+Sys.setlocale("LC_ALL","korean")
+weather<-weather[,-1]
+weather[is.na(weather)]<-0
+colnames(weather)<-c('날짜','기온','강수량','풍속','상대습도','해면기압','전운량','지면온도')
+view(weather)
+```
+
+#미세먼지
+```{r}
+Sys.setlocale("LC_ALL", "C")
+
+
+dust<-read.csv("미세먼지.csv")
+Sys.setlocale("LC_ALL","korean")
+
+
+dust<-dust[,-c(1,2)]
+
+colnames(dust)<-c('날짜','미세먼지농도')
+
+view(dust)
+```
+
+
+# 날짜 기준으로 합치기
+```{r}
+fullweatherdata<-left_join(weather,dust, by="날짜")
+fullweatherdata[is.na(fullweatherdata)]<-'NA'
+fullweatherdata<-filter(fullweatherdata, 미세먼지농도!="NA")
+
+View(fullweatherdata)
+
+```
+
+```{r}
+library(stringr)
+library(chron)
+Sys.setlocale("LC_ALL", "korean")
+attach(fullweatherdata)
+
+finalweather<-fullweatherdata %>%
+  mutate(Season = ifelse(str_sub(날짜,6,7)=='03'|str_sub(날짜,6,7)=='04'|str_sub(날짜,6,7)=='05',1,
+                         ifelse(str_sub(날짜,6,7)=='06'|str_sub(날짜,6,7)=='07'|str_sub(날짜,6,7)=='08',2,
+                                ifelse(str_sub(날짜,6,7)=='09'|str_sub(날짜,6,7)=='10'|str_sub(날짜,6,7)=='11',3,4)
+                         )))
+
+finalweather<-finalweather %>%
+  mutate_at(c("날짜"),function(x){as.Date(x, format="%Y-%m-%d")})
+finalweather<-finalweather %>%
+  mutate(Weekend = ifelse(is.weekend(날짜),0,1))
+View(finalweather)
+
+
+finalweather_final <- finalweather[1:637,]
+
+
+```
+
+
+
+
+#2년치 자전거 정보 불러옵니다
+```{r}
+setwd("C:\\Users\\cwjen_000\\Desktop\\ds프로젝트")
+
+Sys.setlocale("LC_ALL", "C")
+data_19 <-read.csv('2019년_자전거이용통계_일.csv')
+data_18_3 <-read.csv('2018년_자전거이용통계_일_3.csv')
+data_18_2 <-read.csv('2018년_자전거이용통계_일_2.csv')
+data_18_1 <-read.csv('2018년_자전거이용통계_일_1.csv')
+data_17_3 <-read.csv('2017년_자전거이용통계_일_3.csv')
+data_17_2 <-read.csv('2017년_자전거이용통계_일_2.csv')
+data_17_1 <-read.csv('2017년_자전거이용통계_일_1.csv')
+
+Sys.setlocale("LC_ALL","korean")
+data_17_1<-as.data.frame(lapply( data_17_1, gsub, pattern="\'", replacement="", fixed=TRUE))
+data_17_2<-as.data.frame(lapply( data_17_2, gsub, pattern="\'", replacement="", fixed=TRUE))
+data_17_3<-as.data.frame(lapply( data_17_3, gsub, pattern="\'", replacement="", fixed=TRUE))
+data_18_1<-as.data.frame(lapply( data_18_1, gsub, pattern="\'", replacement="", fixed=TRUE))
+data_18_2<-as.data.frame(lapply( data_18_2, gsub, pattern="\'", replacement="", fixed=TRUE))
+data_18_3<-as.data.frame(lapply( data_18_3, gsub, pattern="\'", replacement="", fixed=TRUE))
+data_19 <- as.data.frame(lapply( data_19, gsub, pattern="\'", replacement="", fixed=TRUE))
+
+
+
+
+```
+
+# 날짜별 이용량을 count 합니다
+```{r}
+a<-data_17_1 %>% group_by(`X.대여일자.`) %>% count(name="이용량")
+b<-data_17_2 %>% group_by(`X.대여일자.`) %>% count(name="이용량")
+
+c<-data_17_3 %>% group_by(`X..........`) %>% count(name="이용량")
+d<-data_18_1 %>% group_by(`X..........`) %>% count(name="이용량")
+e<-data_18_2 %>% group_by(`X..........`) %>% count(name="이용량")
+f<-data_18_3 %>%  group_by(`X2018.07.01`) %>% count(name="이용량")
+g<-data_19 %>%  group_by(`X2019.01.01`) %>% count(name="이용량")
+
+
+names(c)[1] <- "X.대여일자."
+names(d)[1] <- "X.대여일자."
+names(e)[1] <- "X.대여일자."
+names(f)[1] <- "X.대여일자."
+names(g)[1]  <- "X.대여일자."
+
+View(date_use)
+date_use <- rbind(a,b,c,d,e,f,g) #2017.01.01 - 2019.04.15 까지의 data
+names(date_use)[1]<-"날짜"
+date_use$날짜 <- as.Date(date_use$날짜)
+
+
+count(is.na(date_use$이용량))
+#NA는 없습니다.
+```
+
+# 날씨와 합쳐요
+```{r}
+
+All_before<-left_join(finalweather_final, date_use, by="날짜")
+View(All_before)
+
+count(is.na(All_before$이용량)) #96개의 na가 존재합니다. 원데이터에 날짜가 누락되어있었기 때문입니다.
+
+#na를 제거합니다
+All_before<-All_before[!is.na(All_before$이용량),]
+count(is.na(All_before$이용량))
+
+```
+
+```{r}
+# sas 모델링
+All_before$미세먼지농도 <- as.numeric(All_before$미세먼지농도)
+write.csv(All_before, "All.csv")
+
+
+
+```
+
+
+
+
+
+# 모델링 위한 더미화
+
+```{r}
+head(All)
+#season1 : (s1=1, s2=0, s3=0)
+#season2 : (s1=0, s2=1, s3=0)
+#season3 : (s1=0, s2=0, s3=1)
+#season4 : (s1=0, s2=0, s3=0)
+
+All<-All_before %>% mutate(S1=ifelse(Season==1,1,0),
+               S2=ifelse(Season==2,1,0),
+               S3=ifelse(Season==3,1,0))
+
+# 이제 필요없어진 Season을 없애줍니다
+All <- All[,-10]
+View(All)
+
+# S들과 weekend는 factor 입니다
+All$S1 <- as.factor(All$S1)
+All$S2 <- as.factor(All$S2)
+All$S3 <- as.factor(All$S3)
+All$Weekend <- as.factor(All$Weekend)
+
+#미세먼지 농도는 numeric입니다
+All$미세먼지농도<-as.numeric(All$미세먼지농도)
+
+
+head(All)
+```
+
+
+
+# numeric 변수와의 상관관계 파악
+```{r}
+head(All)
+all_numVar <- All[,-c(1,10,12,13,14)]
+cor_numVar <- cor(all_numVar, use="pairwise.complete.obs") #correlations of all numeric variables
+
+#sort on decreasing correlations with 이용량
+cor_sorted <- as.matrix(sort(cor_numVar[,'이용량'], decreasing = TRUE))
+
+#select only high corelations
+CorHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)>0.3)))
+cor_numVar <- cor_numVar[CorHigh, CorHigh]
+
+library(corrplot)
+corrplot.mixed(cor_numVar, tl.col="black", tl.pos = "lt")
+
+```
+
+
+
+
+
+# 모델링
+```{r}
+#lasso 회귀
+All_2 <- All[,-1]
+x1<- model.matrix(이용량~., All_2)[,-1]
+y1 <- All_2$이용량
+
+set.seed(1575)
+train1=sample(1:nrow(x1), nrow(x1)/2)
+test1=(-train1)
+ytest1= y1[test1]
+
+cv.lasso1 <- cv.glmnet(x1[train1,], y1[train1], alpha=1)
+lasso.coef1 = predict(cv.lasso1, type = "coefficients", s=cv.lasso1$lambda.min) # coefficients
+
+lasso.prediction1 = predict(cv.lasso1, s=cv.lasso1$lambda.min, newx = x1[test1,]) # coefficients
+
+sqrt(mean((lasso.prediction1-ytest1)^2))
+```
+
+# random Forest
+```{r}
+
+set.seed(1234)
+sampling<-sample(1:length(All$이용량), size=as.integer(length(All$이용량)/3*2))
+
+All_train <- All[,-1]
+All_train <- All_train[c(sampling),]
+All_test <- All_train[-c(sampling),]
+test_x <- All_test[c("기온","강수량" ,"풍속" ,"상대습도"     ,"해면기압",     "전운량",      
+ "지면온도"   ,  "미세먼지농도" ,"Weekend",     
+    "S1"           ,"S2",           "S3")]
+
+test_y <- All_test$이용량
+
+
+library(randomForest)
+set.seed(1234)
+
+rf.fit <- randomForest(`이용량`~.,data=All_train, mtry=4, ntree=400, importance=TRUE)
+
+# 성능 평가
+
+y_pred= predict(rf.fit, test_x)
+
+
+importance(rf.fit)
+
+sqrt(mean((y_pred-test_y)^2))
+```
+
+
+
+# regression tree in r
+```{r}
+library(tree)
+treemod<- tree(이용량~., data=All_train)
+plot(treemod)
+text(treemod)
+
+# 프루닝: 10개의 가지로 결정
+cv_trees <-cv.tree(treemod, FUN=prune.tree)
+plot(cv_trees)
+
+
+pruned_tree<- prune.tree(treemod, best=10)
+plot(pruned_tree)
+text(pruned_tree, pretty=0)
+
+
+library(e1071)
+
+treepred <- predict(pruned_tree, All_test, type='vector')
+sqrt(mean((treepred-test_y)^2))
+
+plot( treepred, test_y)
+abline(0,1)
+```
+
+#회귀
+```{r}
+
+lm1 <- lm(이용량~. , data=All_train)
+summary(lm1)
+step(lm1)
+
+
+# AIC 를 가장 많이 낮추는 모델
+lm2<-lm(이용량~S2+미세먼지농도+전운량, data=All_train)
+pred1<-predict(lm2, test_x, interval="confidence")
+
+
+pred_table<-cbind(pred1, test_y)
+
+
+
+```
+
+
+# random forest model로 2019년 6월 9일의 공공자전거 수요량을 예측해봅니다.
+
+```{r}
+Icnweather <- read.csv("인천날씨정보.csv")
+Icndust <- read.csv("인천미세먼지.csv")
+
+Icnweather<-Icnweather[,-1,-2]
+names(Icnweather)<-c('날짜','기온','강수량','풍속','상대습도','해면기압','전운량','지면온도')
+Icnweather[is.na(Icnweather)]<-0
+
+head(Icnweather)
+
+names(Icndust)<- c("날짜","미세먼지농도")
+
+
+
+Icnfullweatherdata<-left_join(Icnweather,Icndust, by="날짜")
+Icnfullweatherdata[is.na(Icnfullweatherdata)]<-'NA'
+Icnfullweatherdata<-filter(Icnfullweatherdata, 미세먼지농도!="NA")
+
+View(Icnfullweatherdata)
+
+```
+
+# test data 형식과 똑같이정리하는 과정
+```{r}
+library(stringr)
+library(chron)
+Sys.setlocale("LC_ALL", "korean")
+attach(Icnfullweatherdata)
+
+Icnfinalweather<-Icnfullweatherdata %>%
+  mutate(Season = ifelse(str_sub(날짜,6,7)=='03'|str_sub(날짜,6,7)=='04'|str_sub(날짜,6,7)=='05',1,
+                         ifelse(str_sub(날짜,6,7)=='06'|str_sub(날짜,6,7)=='07'|str_sub(날짜,6,7)=='08',2,
+                                ifelse(str_sub(날짜,6,7)=='09'|str_sub(날짜,6,7)=='10'|str_sub(날짜,6,7)=='11',3,4)
+                         )))
+
+Icnfinalweather<-Icnfinalweather %>%
+  mutate_at(c("날짜"),function(x){as.Date(x, format="%Y-%m-%d")})
+Icnfinalweather<-Icnfinalweather %>%
+  mutate(Weekend = ifelse(is.weekend(날짜),0,1))
+
+Icnfinalweather<-Icnfinalweather %>% mutate(S1=ifelse(Season==1,1,0),
+               S2=ifelse(Season==2,1,0),
+               S3=ifelse(Season==3,1,0))
+Icnfinalweather<-Icnfinalweather[,-10]
+Icnfinalweather$S1 <- as.factor(Icnfinalweather$S1)
+Icnfinalweather$S2 <- as.factor(Icnfinalweather$S2)
+Icnfinalweather$S3 <- as.factor(Icnfinalweather$S3)
+Icnfinalweather$Weekend <- as.factor(Icnfinalweather$Weekend)
+Icnfinalweather$미세먼지농도<-as.numeric(Icnfinalweather$미세먼지농도)
+
+View(Icnfinalweather)
+
+
+
+# 다음은 2019년 6월 9월 서울의 날씨 데이터입니다 
+weatherinfo_190609<-Icnfinalweather[19,][-1]
+
+
+# random forest model을 통해 예측한 수요량은 다음과 같습니다
+
+    weatherinfo_190609 <- rbind(train_x[1, ] , weatherinfo_190609)
+    weatherinfo_190609 <- weatherinfo_190609[-1,]
+predict(rf.fit, weatherinfo_190609)
+
+weatherinfo_190609 #날씨가 다음과 같은 날일때 
+newpred<-predict(rf.fit, weatherinfo_190609) 
+
+#날씨가 다음과 같을 때 예측 수요량은 약 8076대입니다.
+cbind(newpred, Icnfinalweather[19,] )
+
+
+
+#이러한 모델링을 바탕으로 날씨에 따른 일일수요량을 예측할 수 있습니다.
+    ```
+
