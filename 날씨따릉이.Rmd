@@ -1,0 +1,73 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("chron")
+
+```
+
+
+
+#날씨정보
+```{r}
+Sys.setlocale("LC_ALL", "C")
+setwd("C:\\Users\\이다현\\Desktop\\ds")
+weather<-read.csv("날씨.csv")
+
+Sys.setlocale("LC_ALL","korean")
+weather<-weather[,-1]
+weather[is.na(weather)]<-0
+colnames(weather)<-c('날짜','기온','강수량','풍속','상대습도','해면기압','전운량','지면온도')
+view(weather)
+```
+
+#미세먼지
+```{r}
+Sys.setlocale("LC_ALL", "C")
+setwd("C:\\Users\\이다현\\Desktop\\ds")
+
+dust<-read.csv("미세먼지.csv")
+Sys.setlocale("LC_ALL","korean")
+dust<-dust[,-c(1,2)]
+
+colnames(dust)<-c('날짜','미세먼지농도')
+
+view(dust)
+```
+
+
+# 날짜 기준으로 합치기
+```{r}
+library(plyr)
+fullweatherdata<-join_all(list(weather,dust), by='날짜', type='left')
+fullweatherdata[is.na(fullweatherdata)]<-'NA'
+fullweatherdata<-filter(fullweatherdata, 미세먼지농도!="NA")
+
+View(fullweatherdata)
+
+```
+
+```{r}
+library(stringr)
+library(chron)
+Sys.setlocale("LC_ALL", "korean")
+attach(fullweatherdata)
+
+finalweather<-fullweatherdata %>%
+  mutate(Season = ifelse(str_sub(날짜,6,7)=='03'|str_sub(날짜,6,7)=='04'|str_sub(날짜,6,7)=='05',1,
+                         ifelse(str_sub(날짜,6,7)=='06'|str_sub(날짜,6,7)=='07'|str_sub(날짜,6,7)=='08',2,
+                                ifelse(str_sub(날짜,6,7)=='09'|str_sub(날짜,6,7)=='10'|str_sub(날짜,6,7)=='11',3,4)
+                         )))
+
+finalweather<-finalweather %>%
+  mutate_at(c("날짜"),function(x){as.Date(x, format="%Y-%m-%d")})
+finalweather<-finalweather %>%
+  mutate(Weekend = ifelse(is.weekend(날짜),0,1))
+view(finalweather)
+rm(f)
+```
+
